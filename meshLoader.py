@@ -1,6 +1,10 @@
 import sys
 import struct
 
+def alignmentHelper(size):
+    #intentionally stupid to match file format
+    return bytearray(4 - size % 4)
+
 class Mesh:
     class MeshDataHeader:
         fileId = 0
@@ -220,7 +224,7 @@ class Mesh:
                     entriesData += struct.pack("<I", entry.componentType)
                     entriesData += struct.pack("<I", entry.numComponents)
                     entriesData += struct.pack("<I", entry.firstItemOffset)
-                entriesData += bytearray(4) # alignment
+                entriesData += alignmentHelper(len(entriesData)) # alignment
                 offsetTracker.advance(len(entriesData))
                 meshFile.write(entriesData)
 
@@ -229,9 +233,17 @@ class Mesh:
                 for entry in self.vertexBuffer.entires:
                     entryNameData += struct.pack("<I", len(entry.name))
                     entryNameData += bytearray(entry.name, 'utf-8')
-                    entryNameData += bytearray(4 - len(entry.name) % 4) # alignment
+                    entryNameData += alignmentHelper(len(entry.name));
                 meshFile.write(entryNameData)
                 offsetTracker.advance(len(entryNameData))
+
+                # write vertex buffer data
+                meshFile.write(self.vertexBuffer.data)
+                meshFile.write(alignmentHelper(len(self.vertexBuffer.data)))
+                # write index buffer data
+                meshFile.write(self.indexBuffer.data)
+                meshFile.write(alignmentHelper(len(self.indexBuffer.data)))
+
                 meshFile.close()
         except OSError:
             print("Could not open/create file:", outputFile)
