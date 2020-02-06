@@ -10,6 +10,12 @@ class Mesh:
         #def loadMeshDataHeader(self, inputFile, offset):
         def isValid(self):
             return self.fileId == 3365961549 and self.fileVersion == 3
+        def save(self):
+            outputBuffer = struct.pack("<I", self.fileId)
+            outputBuffer += struct.pack("<H", self.fileVersion)
+            outputBuffer += struct.pack("<H", self.headerFlags)
+            outputBuffer += struct.pack("<I", self.sizeInBytes)
+            return outputBuffer, 12
 
     class MeshOffsetTracker:
         startOffset = 0
@@ -176,6 +182,61 @@ class Mesh:
             print("Could not open/read file:", inputFile)
         except: #handle other exceptions such as attribute errors
             print("Unexpected error:", sys.exc_info()[0])
+    def writeMesh(self, outputFile):
+        try:
+            with open(outputFile, "wb") as meshFile:
+                # write header placeholder
+                header,headerSize = self.meshInfo.save()
+                meshFile.write(header)
+                offsetTracker = self.MeshOffsetTracker(headerSize)
+                # write Mesh metadata
+                meshMetaData = bytearray()
+                meshMetaData += struct.pack("<I", 0)
+                meshMetaData += struct.pack("<I", len(self.vertexBuffer.entires))
+                meshMetaData += struct.pack("<I", self.vertexBuffer.stride)
+                meshMetaData += struct.pack("<I", 0)
+                meshMetaData += struct.pack("<I", len(self.vertexBuffer.data))
+
+                meshMetaData += struct.pack("<I", self.indexBuffer.componentType)
+                meshMetaData += struct.pack("<I", 0)
+                meshMetaData += struct.pack("<I", len(self.indexBuffer.data))
+
+                meshMetaData += struct.pack("<I", 0)
+                meshMetaData += struct.pack("<I", len(self.subsets))
+
+                meshMetaData += struct.pack("<I", 0)
+                meshMetaData += struct.pack("<I", len(self.joints))
+
+                meshMetaData += struct.pack("<I", self.drawMode)
+                meshMetaData += struct.pack("<I", self.winding)
+
+                meshFile.write(meshMetaData)
+                offsetTracker.advance(56)
+
+                # Vertex Buffer Entries
+                entriesData = bytearray()
+                for entry in self.vertexBuffer.entires:
+                    entriesData += struct.pack("<I", 0)
+                    entriesData += struct.pack("<I", entry.componentType)
+                    entriesData += struct.pack("<I", entry.numComponents)
+                    entriesData += struct.pack("<I", entry.firstItemOffset)
+                entriesData += bytearray(4) # alignment
+                offsetTracker.advance(len(entriesData))
+                meshFile.write(entriesData)
+
+                # Vertex Buffer Entry Names
+                entryNameData = bytearray()
+                for entry in self.vertexBuffer.entires:
+                    entryNameData += struct.pack("<I", len(entry.name))
+                    entryNameData += bytearray(entry.name, 'utf-8')
+                    entryNameData += bytearray(4 - len(entry.name) % 4) # alignment
+                meshFile.write(entryNameData)
+                offsetTracker.advance(len(entryNameData))
+                meshFile.close()
+        except OSError:
+            print("Could not open/create file:", outputFile)
+        except: #handle other exceptions such as attribute errors
+            print("Unexpected error:", sys.exc_info()[0])
 
 class MultiMeshInfo:
     fileId = 0
@@ -231,6 +292,7 @@ def main(argv):
             offset = multiMeshInfo.meshEntries[entryId]
             mesh = Mesh()
             mesh.loadMesh(inputfile, offset)
+            mesh.writeMesh("./test.mesh")
             meshes[entryId] = mesh
     else:
         # This still may be a regular mesh file
