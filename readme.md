@@ -1,0 +1,1 @@
+This project is an attempt to document the .mesh file format present in Qt Quick 3D.
