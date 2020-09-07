@@ -78,3 +78,55 @@
 - UInt32 version | 1
 - UInt32 entriesOffset // internal use really
 - UInt32 entriesSize
+
+
+# Enum values
+
+## drawMode
+1. Points
+2. LineStrip
+3. LineLoop
+4. Lines
+5. TriangleStrip
+6. TriangleFan
+7. Triangles
+8. Patches
+
+## componentType
+1. Unsigned 8bit Int (size: 1)
+2. Signed 8bit Int (size: 1)
+3. Unsigned 16bit Int (size: 2)
+4. Signed 16bit Int (size: 2)
+5. Unsigned 32bit Int (size: 4)
+6. Signed 32bit Int (size: 4)
+7. Unsigned 64bit Int (size: 8)
+8. Signed 64bit Int (size: 8)
+9. 16bit Float (size: 2)
+10. 32bit Float (size: 4)
+11. 64bit Float (size: 8)
+
+## winding
+1. Clockwise
+2. CounterClockwise
+
+## vertex entry names
+- attr_pos
+- attr_norm
+- attr_uv0
+- attr_uv1
+- attr_textan
+- attr_binormal
+- attr_joints
+- attr_weights
+- attr_colors
+
+## semantic sizes
+- Index 1
+- Position 3
+- Normal 3 
+- TexCoord 2 
+- Tangent 3
+- Binormal 3
+- Joint 4
+- Weight 4
+- Color 4
