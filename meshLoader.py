@@ -80,11 +80,30 @@ class Mesh:
     class IndexBuffer:
         componentType = 0
         data = []
+        def indexes(self):
+            # This really should only ever be Uint16 or Uint32
+            indexes = []
+            if self.componentType == 3: # uint16
+                dataSize = 2
+                size = len(self.data) / dataSize
+                for i in range(size):
+                    index, = struct.unpack_from("<H", self.data, i * dataSize)
+                    indexes.append(index)
+            elif self.componentType == 5: # uint32
+                dataSize = 4
+                size = len(self.data) // dataSize
+                for i in range(size):
+                    index, = struct.unpack_from("<I", self.data, i * dataSize)
+                    indexes.append(index)
+
+            return indexes
 
     class MeshSubset:
         class MeshBounds:
             minimum = {'x': 0.0, 'y': 0.0, 'z': 0.0}
             maximum = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+            def printBounds(self):
+                print(f"\tbounds: \n\t\tmin: ({self.minimum['x']}, {self.minimum['y']}, {self.minimum['z']}) \n\t\tmax: ({self.maximum['x']}, {self.maximum['y']}, {self.maximum['z']})")
 
         count = 0
         offset = 0
@@ -335,13 +354,16 @@ def main(argv):
             offset = multiMeshInfo.meshEntries[entryId]
             mesh = Mesh()
             mesh.loadMesh(inputfile, offset)
-            mesh.writeMesh("./test.mesh")
+            #mesh.writeMesh("./test.mesh")
             meshes[entryId] = mesh
     else:
         # This still may be a regular mesh file
         mesh = Mesh()
         mesh.loadMesh(inputfile, 0)
         meshes[0] = mesh
+
+    for mesh in meshes.values():
+        print(mesh.indexBuffer.indexes());
 
 if __name__ == "__main__":
    main(sys.argv[1:])
