@@ -71,11 +71,52 @@ class Mesh:
         numComponents = 0
         firstItemOffset = 0
         name = ""
+        def getFormatString(self):
+            formatString = "<"
+            formatLetter = ''
+            if self.componentType == 1: # uint8 
+                formatLetter = 'B'
+            elif self.componentType == 2: # int8
+                formatLetter = 'b'
+            elif self.componentType == 3: # uint16
+                formatLetter = 'H'
+            elif self.componentType == 4: # int16
+                formatLetter = 'h'
+            elif self.componentType == 5: # uint32
+                formatLetter = "I"
+            elif self.componentType == 6: # int32
+                formatLetter = "i"
+            elif self.componentType == 7: # uin64
+                formatLetter = "Q"
+            elif self.componentType == 8: # int64
+                formatLetter = "q"
+            elif self.componentType == 9: # float16
+                formatLetter = "e"
+            elif self.componentType == 10: #float32
+                formatLetter = "f"
+            elif self.componentType == 11: #float64
+                formatLetter = "d"
+            else:
+                formatLetter = "f"
+            for i in range(self.numComponents):
+                formatString += formatLetter
+            return formatString
 
     class VertexBuffer:
         stride = 0
         entires = []
         data = []  
+        def vertices(self):
+            vertices = []
+            # vertices is a list of dictionaries containing all enrties for that index
+            size = len(self.data) // self.stride
+            for index in range(size):
+                vertex = {}
+                for entry in self.entires:
+                    offset = self.stride * index + entry.firstItemOffset
+                    vertex[entry.name] = struct.unpack_from(entry.getFormatString(), self.data, offset)
+                vertices.append(vertex)
+            return vertices
 
     class IndexBuffer:
         componentType = 0
@@ -85,7 +126,7 @@ class Mesh:
             indexes = []
             if self.componentType == 3: # uint16
                 dataSize = 2
-                size = len(self.data) / dataSize
+                size = len(self.data) // dataSize
                 for i in range(size):
                     index, = struct.unpack_from("<H", self.data, i * dataSize)
                     indexes.append(index)
@@ -364,6 +405,7 @@ def main(argv):
 
     for mesh in meshes.values():
         print(mesh.indexBuffer.indexes());
+        print(mesh.vertexBuffer.vertices());
 
 if __name__ == "__main__":
    main(sys.argv[1:])
