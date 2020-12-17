@@ -60,7 +60,7 @@ class Mesh:
         def offset(self):
             return self.startOffset + self.byteCounter
         def alignedAdvance(self, advanceAmount):
-            self.advance(advanceAmount);
+            self.advance(advanceAmount)
             alignmentAmount = 4 - (self.byteCounter % 4)
             self.byteCounter += alignmentAmount
         def advance(self, advanceAmount):
@@ -150,6 +150,7 @@ class Mesh:
         offset = 0
         bounds = MeshBounds()
         name = ""
+        nameLength = 0
 
     class Joint:
         jointId = 0
@@ -218,11 +219,11 @@ class Mesh:
                     entriesByteSize += 16
                     self.vertexBuffer.entires.append(vertexBufferEntry)
                 # align after reading entires
-                offsetTracker.alignedAdvance(entriesByteSize);
+                offsetTracker.alignedAdvance(entriesByteSize)
                 meshFile.seek(offsetTracker.offset())
                 for entry in self.vertexBuffer.entires:
                     nameLength, = struct.unpack("<I", meshFile.read(4))
-                    offsetTracker.advance(4);
+                    offsetTracker.advance(4)
                     unpackFormat = "<" + str(nameLength) + "s"
                     entry.name = struct.unpack(unpackFormat, meshFile.read(nameLength))[0].decode('utf-8')
                     # get things aligned again if needed
@@ -240,6 +241,7 @@ class Mesh:
                 meshFile.seek(offsetTracker.offset())
 
                 # Subsets
+                subsetByteSize = 0
                 for subsetIndex in range(subsetsSize):
                     subset = self.MeshSubset()
                     subset.count, = struct.unpack("<I", meshFile.read(4))
@@ -251,14 +253,18 @@ class Mesh:
                     subset.bounds.maximum["y"], = struct.unpack("<f", meshFile.read(4))
                     subset.bounds.maximum["z"], = struct.unpack("<f", meshFile.read(4))
                     nameOffset, = struct.unpack("<I", meshFile.read(4))
-                    nameLength, = struct.unpack("<I", meshFile.read(4))
-                    offsetTracker.alignedAdvance(40)
-                    meshFile.seek(offsetTracker.offset())
-                    # then read subset name as char16_t
-                    subset.name = meshFile.read(nameLength * 2).decode("utf_16_le")
-                    offsetTracker.alignedAdvance(nameLength * 2)
-                    meshFile.seek(offsetTracker.offset())
+                    subset.nameLength, = struct.unpack("<I", meshFile.read(4))
+                    subsetByteSize += 40
                     self.subsets.append(subset)
+                # adjust for padding after subsets
+                offsetTracker.alignedAdvance(subsetByteSize) 
+                meshFile.seek(offsetTracker.offset())
+
+                # Subset Names
+                for subset in self.subsets:
+                    subset.name = meshFile.read(subset.nameLength * 2).decode("utf_16_le")
+                    offsetTracker.alignedAdvance(subset.nameLength * 2)
+                    meshFile.seek(offsetTracker.offset())
 
                 # Joints
                 for jointIndex in range(jointsSize):
@@ -269,8 +275,9 @@ class Mesh:
                         joint.invBindPos[x], = struct.unpack("<f", meshFile.read(4))
                     for x in range(16):
                         joint.localToGlobalBoneSpace[x], = struct.unpack("<f", meshFile.read(4))
-                    offsetTracker.alignedAdvance(136)
+                    offsetTracker.advance(136)
                     meshFile.seek(offsetTracker.offset())
+                    self.joints.append(joint)
 
                 meshFile.close()
         except OSError:
@@ -324,7 +331,7 @@ class Mesh:
                 for entry in self.vertexBuffer.entires:
                     entryNameData += struct.pack("<I", len(entry.name))
                     entryNameData += bytearray(entry.name, 'utf-8')
-                    entryNameData += alignmentHelper(len(entry.name));
+                    entryNameData += alignmentHelper(len(entry.name))
                 meshFile.write(entryNameData)
                 offsetTracker.advance(len(entryNameData))
 

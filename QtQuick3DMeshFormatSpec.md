@@ -46,7 +46,7 @@
 - UInt8[IndexBuffer::dataSize]
 - optional padding (so we are 4 byte aligned)
 
-## Subsets [Mesh::subsetsSize]
+## Subsets [Mesh::subsetsSize] (40 bytes)
 - UInt32 count
 - UInt32 offset
 - Bounds3 bounds
@@ -54,10 +54,14 @@
    - vec3<float32> maximum
 - UInt32 nameOffset
 - UInt32 nameSize // char16_t
+...
+- 4bytes of alignment padding
+
+## Subset Names [Mesh::subsetSize]
+Names are stored after subsets array in order of subset based on padded length
+- sizeof(char16_t) * subset.nameSize
 - optional padding (so we are 4 byte aligned)
-- char16[nameSize]
-- optional padding (so we are 4 byte aligned)
-- ...
+
 
 ## Joint [Mesh::joinsSize] (136 bytes)
 - UInt32 jointID
