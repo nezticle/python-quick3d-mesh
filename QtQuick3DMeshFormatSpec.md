@@ -1,5 +1,7 @@
 # Qt Quick 3D Mesh Format Specification
 
+Qt Quick 3D Mesh files are a binary format for storing 3D geometry. Mesh files can contain multiple Meshes, each of which has their own vertex and index buffers, as well as subset views into each.  The container format is specified by the MultiMeshFooter which can be accessed by reading the last 16 bytes of the .mesh file.  With this you can get the number of Meshes contained in the file, which by reading back 16 bytes before the MultiMeshFooter for each mesh available you can get the offsets for each mesh in the file.  Then each mesh can be parsed at those offsets by reading the first 12 bytes at that offset containing the MeshDataHeader.
+
 ## MeshDataHeader (12 bytes)
 - UInt32 fileId | 3365961549U
 - UInt16 fileVersion | 3
