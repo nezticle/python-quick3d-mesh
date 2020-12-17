@@ -2,6 +2,12 @@
 
 Qt Quick 3D Mesh files are a binary format for storing 3D geometry. Mesh files can contain multiple Meshes, each of which has their own vertex and index buffers, as well as subset views into each.  The container format is specified by the MultiMeshFooter which can be accessed by reading the last 16 bytes of the .mesh file.  With this you can get the number of Meshes contained in the file, which by reading back 16 bytes before the MultiMeshFooter for each mesh available you can get the offsets for each mesh in the file.  Then each mesh can be parsed at those offsets by reading the first 12 bytes at that offset containing the MeshDataHeader.
 
+An important note to remember is that most of the values with offset in the name are misleading.  MultiMeshEntry::meshOffset is the only field you can trust, all other offset fields are garbage values that would get filled in later by the parser, and is an implimentation detail that leaked into the file format.  So rather than using any data that might be in those offsets, either skip them, or ignore any value after reading them in.  The *real* offset of the value will be specified by this spec.  The offsets will be at certain locations in the file based on the order of the structs below.
+
+Anoter important point is expected padding.  Everything needs to be 4 byte aligned, and for the most part it is already (with the exception of some string data). But also do to some weird implimentation details (READ: Bugs) sometimes you just need to throw in an extra 4 bytes for good measurre.  So note after reading all VertexBufferEntries (not between each one though), you need to add 4 bytes of padding before parsing/writing the name strings.  The same thing is true when reading the subset data.  Read all subsets together (they will be 4 byte aligned already) then after reading all of them, add 4 bytes of padding before reading/writing the subset names.  
+
+Endianess is little endian for everything.  Floating point values are all single precision 32bit floats.  Some strings are UTF-8, some are UTF_16_LE... not sure why, but it is what is.
+
 ## MeshDataHeader (12 bytes)
 - UInt32 fileId | 3365961549U
 - UInt16 fileVersion | 3
@@ -10,24 +16,24 @@ Qt Quick 3D Mesh files are a binary format for storing 3D geometry. Mesh files c
 
 ## Mesh (56 bytes)
 - VertexBuffer vertexBuffer
-    - UInt32 entriesOffset // internal use really
+    - UInt32 entriesOffset // ignore this value
     - UInt32 entriesSize
     - UInt32 stride
-    - UInt32 dataOffset // internal use really
+    - UInt32 dataOffset // ignore this value
     - UInt32 dataSize
 - IndexBuffer indexBuffer
     - UInt32 componentType
-    - UInt32 dataOffset // internal use really
+    - UInt32 dataOffset // ignore this value
     - UInt32 dataSize
-- UInt32 subsetsOffset // internal use really
+- UInt32 subsetsOffset // ignore this value
 - UInt32 subsetsSize
-- UInt32 jointsOffset // internal use really
+- UInt32 jointsOffset // ignore this value
 - UInt32 jointsSize
 - UInt32 drawMode
 - UInt32 winding
 
 ## Vertex Buffer Entries [VertexBuffer::entriesSize]
-- UInt32 nameOffset // not used...
+- UInt32 nameOffset // ignore this value
 - UInt32 componentType
 - UInt32 numComponents
 - UInt32 firstItemOffset
@@ -54,8 +60,8 @@ Qt Quick 3D Mesh files are a binary format for storing 3D geometry. Mesh files c
 - Bounds3 bounds
    - vec3<float32> minimum
    - vec3<float32> maximum
-- UInt32 nameOffset
-- UInt32 nameSize // char16_t
+- UInt32 nameOffset // ignore this value
+- UInt32 nameSize // char16_t letter count, not byte count so multiply x2
 ...
 - 4bytes of alignment padding
 
@@ -75,14 +81,14 @@ Names are stored after subsets array in order of subset based on padded length
 
 
 ## MeshMultiEntry (16 bytes) [MultiMeshFooter::entriesSize]
-- UInt64 meshOffset
+- UInt64 meshOffset // only offset you can trust (seek to this to get the mesh data)
 - UInt32 meshId
 - UInt32 padding // not used (literally padding)
 
 ## MultiMeshFooter (16 bytes)
 - UInt32 fileId | 555777497U
 - UInt32 version | 1
-- UInt32 entriesOffset // internal use really
+- UInt32 entriesOffset // ignore this value
 - UInt32 entriesSize
 
 
