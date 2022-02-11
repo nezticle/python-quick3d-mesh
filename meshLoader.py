@@ -143,6 +143,18 @@ class Mesh:
                     indexes.append(index)
 
             return indexes
+        def setIndexes(self, indexArray, componentType):
+            # this method packs the data buffer from an array of ints
+            type = "<I"
+            if componentType == 3:
+                type = "<H"
+            data = bytearray()
+            for index in indexArray:
+                data += struct.pack(type, index)
+            self.data = data
+            self.componentType = componentType
+
+
 
     class MeshSubset:
         class MeshBounds:
@@ -173,11 +185,12 @@ class Mesh:
                                            0, 0, 1, 0,
                                            0, 0, 0, 1]
 
-    meshInfo = MeshDataHeader()
-    vertexBuffer = VertexBuffer()
-    indexBuffer = IndexBuffer()
-    subsets = []
-    joints = []  
+    def __init__(self):
+        self.meshInfo = self.MeshDataHeader()
+        self.vertexBuffer = self.VertexBuffer()
+        self.indexBuffer = self.IndexBuffer()
+        self.subsets = []
+        self.joints = []  
     def loadMesh(self, inputFile, offset):
         try:
             with open(inputFile, "rb") as meshFile:
@@ -355,9 +368,11 @@ class Mesh:
                 # write vertex buffer data
                 meshFile.write(self.vertexBuffer.data)
                 meshFile.write(alignmentHelper(len(self.vertexBuffer.data)))
+                offsetTracker.alignedAdvance(len(self.vertexBuffer.data))
                 # write index buffer data
                 meshFile.write(self.indexBuffer.data)
                 meshFile.write(alignmentHelper(len(self.indexBuffer.data)))
+                offsetTracker.alignedAdvance(len(self.indexBuffer.data))
 
                 # subsets
                 subsetsData = bytearray()
@@ -386,12 +401,55 @@ class Mesh:
                 meshFile.write(subsetNameData)
                 offsetTracker.advance(len(subsetNameData))
 
+                # Now that we know the final size of the mesh, we need to write
+                # the header again with the correct size
+                meshFile.seek(offset, 0)
+                self.meshInfo.fileVersion = 5 # current version is 5
+                self.meshInfo.sizeInBytes = offsetTracker.offset() - headerSize
+                header,headerSize = self.meshInfo.save()
+                meshFile.write(header)
+
                 meshFile.close()
                 return offsetTracker.offset()
         except OSError:
             print("Could not open/create file:", outputFile)
         except: #handle other exceptions such as attribute errors
             print("Unexpected error:", sys.exc_info()[0])
+    def convertToPointsPrimitive(self):
+        print("Converting mesh to Points")
+        if self.drawMode != 7:
+            print("Conversion not possible with Non-Triangle primitives")
+            return False
+
+        # Build new index buffer
+        oldIndexes = self.indexBuffer.indexes()
+        newIndexes = []
+        newOffset = 0
+        for subset in self.subsets:
+            subsetIndexSet = set()
+            for index in range(subset.offset, subset.count):
+                subsetIndexSet.add(oldIndexes[index])
+            for index in subsetIndexSet:
+                newIndexes.append(index)
+            subset.offset = newOffset
+            subset.count = len(subsetIndexSet)
+            newOffset += subset.count
+
+        # Create new index buffer and fill
+        componentType = 5 # uint32
+        if len(newIndexes) < 65535:
+            componentType = 3 # uint16
+        self.indexBuffer.setIndexes(newIndexes, componentType)
+
+        self.drawMode = 1 # Points
+
+        return False
+    def convertToLinesPrimitive(self):
+        print("Converting mesh to Lines")
+        if self.drawMode != 7:
+            print("Conversion not possible with Non-Triangle primitives")
+            return False
+        return False
 
 class MultiMeshInfo:
     def __init__(self):
@@ -480,20 +538,44 @@ class MeshFile:
 
         multiMeshFooter.saveMultiMeshInfo(outputFile)
 
+    def convertToPointsPrimitive(self):
+        result = False
+        for mesh in self.meshes.values():
+            result &= mesh.convertToPointsPrimitive()
+        return result
+    
+    def convertToLinesPrimitive(self):
+        result = False
+        for mesh in self.meshes.values():
+            result &= mesh.convertToLinesPrimitive()
+        return result
+
 def main():
 
     parser = ArgumentParser(description='Utilities for Qt Quick 3D .mesh Files')
+    modeGroup = parser.add_mutually_exclusive_group()
     parser.add_argument('inputFile', metavar='INPUT', help='Mesh file to load')
+    parser.add_argument('outputFile', metavar='OUTPUT', help='Output mesh file')
+    modeGroup.add_argument('--points', help='Convert Mesh to Points', action='store_true')
+    modeGroup.add_argument('--lines', help='Convert Mesh to Lines', action='store_true')
     args = parser.parse_args()
 
     inputfile = args.inputFile
+    outputFile = args.outputFile
 
     print ('Input file is ', inputfile)
 
     meshFile = MeshFile()
     meshFile.loadMeshFile(inputfile)
 
-    outputFile = 'test.mesh'
+    # Preform actions
+    if args.points:
+        meshFile.convertToPointsPrimitive()
+    elif args.lines:
+        meshFile.convertToLinesPrimitive()
+
+
+    # Save new File
     meshFile.saveMeshFile(outputFile)
 
     return 0
