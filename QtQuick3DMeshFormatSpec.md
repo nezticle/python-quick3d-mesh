@@ -2,11 +2,33 @@
 
 Qt Quick 3D Mesh files are a binary format for storing 3D geometry. Mesh files can contain multiple Meshes, each of which has their own vertex and index buffers, as well as subset views into each.  The container format is specified by the MultiMeshFooter which can be accessed by reading the last 16 bytes of the .mesh file.  With this you can get the number of Meshes contained in the file, which by reading back 16 bytes before the MultiMeshFooter for each mesh available you can get the offsets for each mesh in the file.  Then each mesh can be parsed at those offsets by reading the first 12 bytes at that offset containing the MeshDataHeader.
 
-An important note to remember is that most of the values with offset in the name are misleading.  MultiMeshEntry::meshOffset is the only field you can trust, all other offset fields are garbage values that would get filled in later by the parser, and is an implimentation detail that leaked into the file format.  So rather than using any data that might be in those offsets, either skip them, or ignore any value after reading them in.  The *real* offset of the value will be specified by this spec.  The offsets will be at certain locations in the file based on the order of the structs below.
+An important note to remember is that most of the values with offset in the name are misleading.  MultiMeshEntry::meshOffset is the only field you can trust, all other offset fields are garbage values that would get filled in later by the parser, and is an implementation detail that leaked into the file format.  So rather than using any data that might be in those offsets, either skip them, or ignore any value after reading them in.  The *real* offset of the value will be specified by this spec.  The offsets will be at certain locations in the file based on the order of the structs below.
 
-Anoter important point is expected padding.  Everything needs to be 4 byte aligned, and for the most part it is already (with the exception of some string data). But also do to some weird implimentation details (READ: Bugs) sometimes you just need to throw in an extra 4 bytes for good measurre.  So note after reading all VertexBufferEntries (not between each one though), you need to add 4 bytes of padding before parsing/writing the name strings.  The same thing is true when reading the subset data.  Read all subsets together (they will be 4 byte aligned already) then after reading all of them, add 4 bytes of padding before reading/writing the subset names.  
+Another important point is expected padding.  Everything needs to be 4 byte aligned, and for the most part it is already (with the exception of some string data). But also do to some weird implementation details (READ: Bugs) sometimes you just need to throw in an extra 4 bytes for good measurer.  So note after reading all VertexBufferEntries (not between each one though), you need to add 4 bytes of padding before parsing/writing the name strings.  The same thing is true when reading the subset data.  Read all subsets together (they will be 4 byte aligned already) then after reading all of them, add 4 bytes of padding before reading/writing the subset names.  
 
 Endianess is little endian for everything.  Floating point values are all single precision 32bit floats.  Some strings are UTF-8, some are UTF_16_LE... not sure why, but it is what is.
+
+## Versions
+
+There are two levels of versioning in the Mesh file format.  The container format is separate from the mesh files contained within that container.  The container only has 1 version which is 1.
+
+For the Mesh files appearing in the MultiMesh container, version is significant.  Here is an overview:
+
+### Version 1
+Unsupported version unique to Nvidia Drive Design, Not documented
+
+### Version 2
+Unsupported version unique to Nvidia Drive Design and early releases of Qt 3D Studio, Not documented
+
+### Version 3
+This is the minimum supported version of the Mesh file format with Qt Quick 3D, and the last compatible version that Qt 3D Studio can produce.
+
+### Version 4
+All of the dataOffset fields should now contain 0
+
+### Version 5
+Added lightmapWidth and lightmapHeight to Subsets
+
 
 ## MeshDataHeader (12 bytes)
 - UInt32 fileId | 3365961549U
@@ -64,6 +86,20 @@ Endianess is little endian for everything.  Floating point values are all single
 - UInt32 nameSize // char16_t letter count, not byte count so multiply x2
 ...
 - 4bytes of alignment padding
+
+## Subsets_V5[Mesh::subsetsSize] (48 bytes)
+- UInt32 count
+- UInt32 offset
+- Bounds3 bounds
+   - vec3<float32> minimum
+   - vec3<float32> maximum
+- UInt32 nameOffset // ignore this value
+- UInt32 nameSize // char16_t letter count, not byte count so multiply x2
+- UInt32 lightmapSizeHintWidth
+- UInt32 lightmapSizeHintHeight
+...
+- 4bytes of alignment padding
+
 
 ## Subset Names [Mesh::subsetSize]
 Names are stored after subsets array in order of subset based on padded length

@@ -1,6 +1,6 @@
 #############################################################################
 ##
-## Copyright (C) 2020 Andy Nichols <nezticle@gmail.com>
+## Copyright (C) 2022 Andy Nichols <nezticle@gmail.com>
 ##
 ## You may use this file under the terms of the BSD license as follows:
 ##
@@ -44,7 +44,7 @@ class Mesh:
         sizeInBytes = 0
         #def loadMeshDataHeader(self, inputFile, offset):
         def isValid(self):
-            return self.fileId == 3365961549 and self.fileVersion == 3
+            return self.fileId == 3365961549 and self.fileVersion >= 3
         def save(self):
             outputBuffer = struct.pack("<I", self.fileId)
             outputBuffer += struct.pack("<H", self.fileVersion)
@@ -151,6 +151,8 @@ class Mesh:
         bounds = MeshBounds()
         name = ""
         nameLength = 0
+        lightmapSizeHintWidth = 0
+        lightmapSizeHintHeight = 0
 
     class Joint:
         jointId = 0
@@ -254,7 +256,13 @@ class Mesh:
                     subset.bounds.maximum["z"], = struct.unpack("<f", meshFile.read(4))
                     nameOffset, = struct.unpack("<I", meshFile.read(4))
                     subset.nameLength, = struct.unpack("<I", meshFile.read(4))
-                    subsetByteSize += 40
+                    if self.meshInfo.fileVersion >= 5:
+                        # version 5+
+                        subset.lightmapSizeHintWidth, = struct.unpack("<I", meshFile.read(4))
+                        subset.lightmapSizeHintHeight, = struct.unpack("<I", meshFile.read(4))
+                        subsetByteSize += 48
+                    else:
+                        subsetByteSize += 40
                     self.subsets.append(subset)
                 # adjust for padding after subsets
                 offsetTracker.alignedAdvance(subsetByteSize) 
