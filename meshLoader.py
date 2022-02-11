@@ -31,6 +31,7 @@
 
 import sys
 import struct
+from argparse import ArgumentParser
 
 def alignmentHelper(size):
     #intentionally stupid to match file format
@@ -38,11 +39,12 @@ def alignmentHelper(size):
 
 class Mesh:
     class MeshDataHeader:
-        fileId = 0
-        fileVersion = 0
-        headerFlags = 0
-        sizeInBytes = 0
-        #def loadMeshDataHeader(self, inputFile, offset):
+        def __init__(self):
+            self.fileId = 0
+            self.fileVersion = 0
+            self.headerFlags = 0
+            self.sizeInBytes = 0
+
         def isValid(self):
             return self.fileId == 3365961549 and self.fileVersion >= 3
         def save(self):
@@ -67,10 +69,11 @@ class Mesh:
             self.byteCounter += advanceAmount
 
     class VertexBufferEntry:
-        componentType = 0
-        numComponents = 0
-        firstItemOffset = 0
-        name = ""
+        def __init__(self):
+            self.componentType = 0
+            self.numComponents = 0
+            self.firstItemOffset = 0
+            self.name = ""
         def getFormatString(self):
             formatString = "<"
             formatLetter = ''
@@ -103,9 +106,10 @@ class Mesh:
             return formatString
 
     class VertexBuffer:
-        stride = 0
-        entires = []
-        data = []  
+        def __init__(self):
+            self.stride = 0
+            self.entires = []
+            self.data = []  
         def vertices(self):
             vertices = []
             # vertices is a list of dictionaries containing all enrties for that index
@@ -119,8 +123,9 @@ class Mesh:
             return vertices
 
     class IndexBuffer:
-        componentType = 0
-        data = []
+        def __init__(self):
+            self.componentType = 0
+            self.data = []
         def indexes(self):
             # This really should only ever be Uint16 or Uint32
             indexes = []
@@ -141,30 +146,32 @@ class Mesh:
 
     class MeshSubset:
         class MeshBounds:
-            minimum = {'x': 0.0, 'y': 0.0, 'z': 0.0}
-            maximum = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+            def __init__(self):
+                self.minimum = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+                self.maximum = {'x': 0.0, 'y': 0.0, 'z': 0.0}
             def printBounds(self):
                 print(f"\tbounds: \n\t\tmin: ({self.minimum['x']}, {self.minimum['y']}, {self.minimum['z']}) \n\t\tmax: ({self.maximum['x']}, {self.maximum['y']}, {self.maximum['z']})")
-
-        count = 0
-        offset = 0
-        bounds = MeshBounds()
-        name = ""
-        nameLength = 0
-        lightmapSizeHintWidth = 0
-        lightmapSizeHintHeight = 0
+        def __init__(self):
+            self.count = 0
+            self.offset = 0
+            self.bounds = self.MeshBounds()
+            self.name = ""
+            self.nameLength = 0
+            self.lightmapSizeHintWidth = 0
+            self.lightmapSizeHintHeight = 0
 
     class Joint:
-        jointId = 0
-        parentId = 0
-        invBindPos = [1, 0, 0, 0,
-                    0, 1, 0, 0,
-                    0, 0, 1, 0,
-                    0, 0, 0, 1]
-        localToGlobalBoneSpace = [1, 0, 0, 0,
-                                0, 1, 0, 0,
-                                0, 0, 1, 0,
-                                0, 0, 0, 1]
+        def __init__(self):
+            self.jointId = 0
+            self.parentId = 0
+            self.invBindPos = [1, 0, 0, 0,
+                               0, 1, 0, 0,
+                               0, 0, 1, 0,
+                               0, 0, 0, 1]
+            self.localToGlobalBoneSpace = [1, 0, 0, 0,
+                                           0, 1, 0, 0,
+                                           0, 0, 1, 0,
+                                           0, 0, 0, 1]
 
     meshInfo = MeshDataHeader()
     vertexBuffer = VertexBuffer()
@@ -292,10 +299,12 @@ class Mesh:
             print("Could not open/read file:", inputFile)
         except: #handle other exceptions such as attribute errors
             print("Unexpected error:", sys.exc_info()[0])
-    def writeMesh(self, outputFile):
+    def writeMesh(self, outputFile, offset):
         try:
             with open(outputFile, "wb") as meshFile:
                 # write header placeholder
+                meshFile.seek(offset, 0)
+                self.meshInfo.fileVersion = 5 # current version is 5
                 header,headerSize = self.meshInfo.save()
                 meshFile.write(header)
                 offsetTracker = self.MeshOffsetTracker(headerSize)
@@ -350,16 +359,45 @@ class Mesh:
                 meshFile.write(self.indexBuffer.data)
                 meshFile.write(alignmentHelper(len(self.indexBuffer.data)))
 
+                # subsets
+                subsetsData = bytearray()
+                for subset in self.subsets:
+                    subsetsData += struct.pack("<I", subset.count)
+                    subsetsData += struct.pack("<I", subset.offset)
+                    subsetsData += struct.pack("<f", subset.bounds.minimum["x"])
+                    subsetsData += struct.pack("<f", subset.bounds.minimum["y"])
+                    subsetsData += struct.pack("<f", subset.bounds.minimum["z"])
+                    subsetsData += struct.pack("<f", subset.bounds.maximum["x"])
+                    subsetsData += struct.pack("<f", subset.bounds.maximum["y"])
+                    subsetsData += struct.pack("<f", subset.bounds.maximum["z"])
+                    subsetsData += struct.pack("<I", 0) # offset
+                    subsetsData += struct.pack("<I", subset.nameLength)
+                    subsetsData += struct.pack("<I", subset.lightmapSizeHintWidth)
+                    subsetsData += struct.pack("<I", subset.lightmapSizeHintHeight)
+                subsetsData += alignmentHelper(len(subsetsData)) # alignment
+                offsetTracker.advance(len(subsetsData))
+                meshFile.write(subsetsData)
+
+                # subsets names
+                subsetNameData = bytearray()
+                for subset in self.subsets:
+                    subsetNameData += bytearray(subset.name, 'utf-16le')
+                    subsetNameData += alignmentHelper(subset.nameLength * 2)
+                meshFile.write(subsetNameData)
+                offsetTracker.advance(len(subsetNameData))
+
                 meshFile.close()
+                return offsetTracker.offset()
         except OSError:
             print("Could not open/create file:", outputFile)
         except: #handle other exceptions such as attribute errors
             print("Unexpected error:", sys.exc_info()[0])
 
 class MultiMeshInfo:
-    fileId = 0
-    fileVersion = 0
-    meshEntries = {}
+    def __init__(self):
+        self.fileId = 555777497
+        self.fileVersion = 1
+        self.meshEntries = {}
 
     def loadMultiMeshInfo(self, inputFile):
         try:
@@ -386,41 +424,79 @@ class MultiMeshInfo:
         except: #handle other exceptions such as attribute errors
             print("Unexpected error:", sys.exc_info()[0])
 
+    def saveMultiMeshInfo(self, outputFile):
+        # This is always appended to the end of the file
+        try:
+            with open(outputFile, "ab") as meshFile:
+                #meshFile.seek(0, 2) # seek end of file
+                multiMeshData = bytearray()
+                # MeshMultiEntries
+                for meshId, meshOffset in self.meshEntries.items():
+                    multiMeshData += struct.pack("<Q", meshOffset)
+                    multiMeshData += struct.pack("<I", meshId)
+                    multiMeshData += struct.pack("<I", 0) # padding
+                # MultiMeshFooter
+                multiMeshData += struct.pack("<I", self.fileId)
+                multiMeshData += struct.pack("<I", self.fileVersion)
+                multiMeshData += struct.pack("<I", 0)
+                multiMeshData += struct.pack("<I", len(self.meshEntries))
+                meshFile.write(multiMeshData)
+                meshFile.close()
+        except OSError:
+            print("Could not open/create file:", outputFile)
+        except: #handle other exceptions such as attribute errors
+            print("Unexpected error:", sys.exc_info()[0])
+
     def isValid(self):
         return self.fileId == 555777497 and self.fileVersion == 1
 
-def main(argv):
-    inputfile = ''
+class MeshFile:
+    multiMeshInfo = MultiMeshInfo()
+    meshes = {}
 
-    if len(argv) == 0:
-        print ("meshLoader.py <inputfile>")
-        sys.exit(2)
+    def loadMeshFile(self, inputFile):
+        self.multiMeshInfo.loadMultiMeshInfo(inputFile);
+    
+        if self.multiMeshInfo.isValid() and len(self.multiMeshInfo.meshEntries) > 0:
+            # This is indeed a MultiMesh file
+            for entryId in self.multiMeshInfo.meshEntries.keys():
+                offset = self.multiMeshInfo.meshEntries[entryId]
+                mesh = Mesh()
+                mesh.loadMesh(inputFile, offset)
+                self.meshes[entryId] = mesh
+        else:
+            # This still may be a regular mesh file
+            mesh = Mesh()
+            mesh.loadMesh(inputFile, 0)
+            self.meshes[0] = mesh
+    def saveMeshFile(self, outputFile):
+        print ('Output file is ', outputFile)
 
-    inputfile = argv[0]
+        offset = 0
+        multiMeshFooter = MultiMeshInfo()
+        for meshIndex, mesh in self.meshes.items():
+            multiMeshFooter.meshEntries[meshIndex] = offset
+            offset = mesh.writeMesh(outputFile, offset)
+
+        multiMeshFooter.saveMultiMeshInfo(outputFile)
+
+def main():
+
+    parser = ArgumentParser(description='Utilities for Qt Quick 3D .mesh Files')
+    parser.add_argument('inputFile', metavar='INPUT', help='Mesh file to load')
+    args = parser.parse_args()
+
+    inputfile = args.inputFile
+
     print ('Input file is ', inputfile)
 
-    # Get the Multmesh Data for the inputfile
-    multiMeshInfo = MultiMeshInfo()
-    multiMeshInfo.loadMultiMeshInfo(inputfile);
+    meshFile = MeshFile()
+    meshFile.loadMeshFile(inputfile)
 
-    meshes = {}
-    if multiMeshInfo.isValid() and len(multiMeshInfo.meshEntries) > 0:
-        # This is indeed a MultiMesh file
-        for entryId in multiMeshInfo.meshEntries.keys():
-            offset = multiMeshInfo.meshEntries[entryId]
-            mesh = Mesh()
-            mesh.loadMesh(inputfile, offset)
-            #mesh.writeMesh("./test.mesh")
-            meshes[entryId] = mesh
-    else:
-        # This still may be a regular mesh file
-        mesh = Mesh()
-        mesh.loadMesh(inputfile, 0)
-        meshes[0] = mesh
+    outputFile = 'test.mesh'
+    meshFile.saveMeshFile(outputFile)
 
-    for mesh in meshes.values():
-        print(mesh.indexBuffer.indexes());
-        print(mesh.vertexBuffer.vertices());
+    return 0
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+   sys.exit(main())
