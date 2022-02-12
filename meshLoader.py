@@ -427,7 +427,7 @@ class Mesh:
         newOffset = 0
         for subset in self.subsets:
             subsetIndexSet = set()
-            for index in range(subset.offset, subset.count):
+            for index in range(subset.offset, subset.offset + subset.count):
                 subsetIndexSet.add(oldIndexes[index])
             for index in subsetIndexSet:
                 newIndexes.append(index)
@@ -443,13 +443,46 @@ class Mesh:
 
         self.drawMode = 1 # Points
 
-        return False
+        return True
     def convertToLinesPrimitive(self):
         print("Converting mesh to Lines")
         if self.drawMode != 7:
             print("Conversion not possible with Non-Triangle primitives")
             return False
-        return False
+
+        # Build new index buffer
+        oldIndexes = self.indexBuffer.indexes()
+        newIndexes = []
+        newOffset = 0
+        for subset in self.subsets:
+            index = subset.offset
+            subsetIndex = []
+            while index + 2 < subset.offset + subset.count:
+                vertex1 = oldIndexes[index]
+                vertex2 = oldIndexes[index + 1]
+                vertex3 = oldIndexes[index + 2]
+                subsetIndex.append(vertex1)
+                subsetIndex.append(vertex2)
+                subsetIndex.append(vertex2)
+                subsetIndex.append(vertex3)
+                subsetIndex.append(vertex3)
+                subsetIndex.append(vertex1)
+                index += 3
+            subset.offset = newOffset
+            subset.count = len(subsetIndex)
+            newOffset += subset.count
+            for index in subsetIndex:
+                newIndexes.append(index)
+        
+        # Create new index buffer and fill
+        componentType = 5 # uint32
+        if len(newIndexes) < 65535:
+            componentType = 3 # uint16
+        self.indexBuffer.setIndexes(newIndexes, componentType)
+
+        self.drawMode = 4 # Lines
+
+        return True
 
 class MultiMeshInfo:
     def __init__(self):
