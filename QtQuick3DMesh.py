@@ -31,7 +31,6 @@
 
 import sys
 import struct
-from argparse import ArgumentParser
 
 def alignmentHelper(size):
     #intentionally stupid to match file format
@@ -582,36 +581,3 @@ class MeshFile:
         for mesh in self.meshes.values():
             result &= mesh.convertToLinesPrimitive()
         return result
-
-def main():
-
-    parser = ArgumentParser(description='Utilities for Qt Quick 3D .mesh Files')
-    modeGroup = parser.add_mutually_exclusive_group()
-    parser.add_argument('inputFile', metavar='INPUT', help='Mesh file to load')
-    parser.add_argument('outputFile', metavar='OUTPUT', help='Output mesh file')
-    modeGroup.add_argument('--points', help='Convert Mesh to Points', action='store_true')
-    modeGroup.add_argument('--lines', help='Convert Mesh to Lines', action='store_true')
-    args = parser.parse_args()
-
-    inputfile = args.inputFile
-    outputFile = args.outputFile
-
-    print ('Input file is ', inputfile)
-
-    meshFile = MeshFile()
-    meshFile.loadMeshFile(inputfile)
-
-    # Preform actions
-    if args.points:
-        meshFile.convertToPointsPrimitive()
-    elif args.lines:
-        meshFile.convertToLinesPrimitive()
-
-
-    # Save new File
-    meshFile.saveMeshFile(outputFile)
-
-    return 0
-
-if __name__ == "__main__":
-   sys.exit(main())
