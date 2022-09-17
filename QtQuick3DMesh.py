@@ -108,7 +108,73 @@ class Mesh:
         def __init__(self):
             self.stride = 0
             self.entires = []
-            self.data = []  
+            self.data = []
+            self.positions = []
+            self.normals = []
+            self.uv0 = []
+            self.uv1 = []
+            self.tangents = []
+            self.binormals = []
+            self.joints = []
+            self.weights = []
+            self.colors = []
+
+        def unpackAttributes(self):
+            # cleanup any old data
+            self.positions = []
+            self.normals = []
+            self.uv0 = []
+            self.uv1 = []
+            self.tangents = []
+            self.binormals = []
+            self.joints = []
+            self.weights = []
+            self.colors = []
+            self.morphTargets = {
+                'attr_tpos0\x00': [],
+                'attr_tpos1\x00': [],
+                'attr_tpos2\x00': [],
+                'attr_tpos3\x00': [],
+                'attr_tpos4\x00': [],
+                'attr_tpos5\x00': [],
+                'attr_tpos6\x00': [],
+                'attr_tpos7\x00': [],
+                'attr_tnorm0\x00': [],
+                'attr_tnorm1\x00': [],
+                'attr_tnorm2\x00': [],
+                'attr_tnorm3\x00': [],
+                'attr_ttan0\x00': [],
+                'attr_ttan1\x00': [],
+                'attr_tbinorm0\x00': [],
+                'attr_tbinorm1\x00': []
+            }
+
+            size = len(self.data) // self.stride
+            for index in range(size):
+                for entry in self.entires:
+                    offset = self.stride * index + entry.firstItemOffset
+                    value = struct.unpack_from(entry.getFormatString(), self.data, offset)
+                    if entry.name == 'attr_pos\x00':
+                        self.positions.append(value)
+                    elif entry.name == 'attr_norm\x00':
+                        self.normals.append(value)
+                    elif entry.name == 'attr_uv0\x00':
+                        self.uv0.append(value)
+                    elif entry.name == 'attr_uv1\x00':
+                        self.uv1.append(value)
+                    elif entry.name == 'attr_textan\x00':
+                        self.tangents.append(value)
+                    elif entry.name == 'attr_binormal\x00':
+                        self.binormals.append(value)
+                    elif entry.name == 'attr_joints\x00':
+                        self.joints.append(value)
+                    elif entry.name == 'attr_weights\x00':
+                        self.weights.append(value)
+                    elif entry.name == 'attr_colors\x00':
+                        self.colors.append(value)
+                    else:
+                        self.morphTargets[entry.name].append(value)
+
         def vertices(self):
             vertices = []
             # vertices is a list of dictionaries containing all enrties for that index
