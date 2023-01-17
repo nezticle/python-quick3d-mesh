@@ -236,6 +236,13 @@ class Mesh:
             self.nameLength = 0
             self.lightmapSizeHintWidth = 0
             self.lightmapSizeHintHeight = 0
+            self.lodCount = 0
+
+    class Lod:
+        def __init__(self):
+            self.count = 0
+            self.offset = 0
+            self.distance = 0.0
 
     class Joint:
         def __init__(self):
@@ -255,6 +262,7 @@ class Mesh:
         self.vertexBuffer = self.VertexBuffer()
         self.indexBuffer = self.IndexBuffer()
         self.subsets = []
+        self.lods = []
         self.joints = []  
     def loadMesh(self, inputFile, offset):
         try:
@@ -345,7 +353,12 @@ class Mesh:
                         # version 5+
                         subset.lightmapSizeHintWidth, = struct.unpack("<I", meshFile.read(4))
                         subset.lightmapSizeHintHeight, = struct.unpack("<I", meshFile.read(4))
-                        subsetByteSize += 48
+                        if self.meshInfo.fileVersion >= 6:
+                            # version 6+
+                            subset.lodCount, = struct.unpack("<I", meshFile.read(4))
+                            subsetByteSize += 52
+                        else:
+                            subsetByteSize += 48
                     else:
                         subsetByteSize += 40
                     self.subsets.append(subset)
@@ -358,6 +371,17 @@ class Mesh:
                     subset.name = meshFile.read(subset.nameLength * 2).decode("utf_16_le")
                     offsetTracker.alignedAdvance(subset.nameLength * 2)
                     meshFile.seek(offsetTracker.offset())
+
+                # Lods
+                for subset in self.subsets:
+                    for lodIndex in subset.lodCount:
+                        lod = self.Lod()
+                        lod.count, = struct.unpack("<I", meshFile.read(4))
+                        lod.offset, = struct.unpack("<I", meshFile.read(4))
+                        lod.distance, = struct.unpack("<f", meshFile.read(4))
+                        offsetTracker.advance(12)
+                        meshFile.seek(offsetTracker.offset())
+                        self.lods.append(lod)
 
                 # Joints
                 for jointIndex in range(jointsSize):
@@ -382,7 +406,7 @@ class Mesh:
             with open(outputFile, "wb") as meshFile:
                 # write header placeholder
                 meshFile.seek(offset, 0)
-                self.meshInfo.fileVersion = 5 # current version is 5
+                self.meshInfo.fileVersion = 6 # current version is 6
                 header,headerSize = self.meshInfo.save()
                 meshFile.write(header)
                 offsetTracker = self.MeshOffsetTracker(headerSize)
@@ -454,6 +478,7 @@ class Mesh:
                     subsetsData += struct.pack("<I", subset.nameLength)
                     subsetsData += struct.pack("<I", subset.lightmapSizeHintWidth)
                     subsetsData += struct.pack("<I", subset.lightmapSizeHintHeight)
+                    subsetsData += struct.pack("<I", subset.lodCount)
                 subsetsData += alignmentHelper(len(subsetsData)) # alignment
                 offsetTracker.advance(len(subsetsData))
                 meshFile.write(subsetsData)
@@ -466,10 +491,19 @@ class Mesh:
                 meshFile.write(subsetNameData)
                 offsetTracker.advance(len(subsetNameData))
 
+                # lods
+                lodData = bytearray()
+                for lod in self.lods:
+                    lodData += struct.pack("<I", lod.count)
+                    lodData += struct.pack("<I", lod.offset)
+                    lodData += struct.pack("<f", lod.distance)
+                meshFile.write(lodData)
+                offsetTracker.advance(len(lodData))
+
                 # Now that we know the final size of the mesh, we need to write
                 # the header again with the correct size
                 meshFile.seek(offset, 0)
-                self.meshInfo.fileVersion = 5 # current version is 5
+                self.meshInfo.fileVersion = 6 # current version is 6
                 self.meshInfo.sizeInBytes = offsetTracker.offset() - headerSize
                 header,headerSize = self.meshInfo.save()
                 meshFile.write(header)

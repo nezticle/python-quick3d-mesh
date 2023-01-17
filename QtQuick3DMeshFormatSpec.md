@@ -29,6 +29,9 @@ All of the dataOffset fields should now contain 0
 ### Version 5
 Added lightmapWidth and lightmapHeight to Subsets
 
+### Version 6
+Added LOD levels to subsets
+
 
 ## MeshDataHeader (12 bytes)
 - UInt32 fileId | 3365961549U
@@ -100,12 +103,30 @@ Added lightmapWidth and lightmapHeight to Subsets
 ...
 - 4bytes of alignment padding
 
+## Subsets_V6[Mesh::subsetsSize] (52 bytes)
+- UInt32 count
+- UInt32 offset
+- Bounds3 bounds
+   - vec3<float32> minimum
+   - vec3<float32> maximum
+- UInt32 nameOffset // ignore this value
+- UInt32 nameSize // char16_t letter count, not byte count so multiply x2
+- UInt32 lightmapSizeHintWidth
+- UInt32 lightmapSizeHintHeight
+- UInt32 lodCount
+...
+- 4bytes of alignment padding
 
 ## Subset Names [Mesh::subsetSize]
 Names are stored after subsets array in order of subset based on padded length
 - sizeof(char16_t) * subset.nameSize
 - optional padding (so we are 4 byte aligned)
 
+## LODs  (12 bytes)
+Lods are stored after subset names in order of subsets
+- UInt32 count // length of lod indexes
+- UInt32 offset // start of lod indexes
+- float32 distance // ideal distance metric for usage
 
 ## Joint [Mesh::joinsSize] (136 bytes)
 - UInt32 jointID
