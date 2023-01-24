@@ -264,6 +264,8 @@ class Mesh:
         self.subsets = []
         self.lods = []
         self.joints = []  
+        self.drawMode = 7
+        self.winding = 2
     def loadMesh(self, inputFile, offset):
         try:
             with open(inputFile, "rb") as meshFile:
