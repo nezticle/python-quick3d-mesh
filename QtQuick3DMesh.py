@@ -107,7 +107,7 @@ class Mesh:
     class VertexBuffer:
         def __init__(self):
             self.stride = 0
-            self.entires = []
+            self.entries = []
             self.data = []
             self.positions = []
             self.normals = []
@@ -151,7 +151,7 @@ class Mesh:
 
             size = len(self.data) // self.stride
             for index in range(size):
-                for entry in self.entires:
+                for entry in self.entries:
                     offset = self.stride * index + entry.firstItemOffset
                     value = struct.unpack_from(entry.getFormatString(), self.data, offset)
                     if entry.name == 'attr_pos\x00':
@@ -181,7 +181,7 @@ class Mesh:
             size = len(self.data) // self.stride
             for index in range(size):
                 vertex = {}
-                for entry in self.entires:
+                for entry in self.entries:
                     offset = self.stride * index + entry.firstItemOffset
                     vertex[entry.name] = struct.unpack_from(entry.getFormatString(), self.data, offset)
                 vertices.append(vertex)
@@ -264,6 +264,8 @@ class Mesh:
         self.subsets = []
         self.lods = []
         self.joints = []  
+        self.drawMode = 7
+        self.winding = 2
     def loadMesh(self, inputFile, offset):
         try:
             with open(inputFile, "rb") as meshFile:
@@ -312,11 +314,11 @@ class Mesh:
                     vertexBufferEntry.numComponents, = struct.unpack("<I", meshFile.read(4))
                     vertexBufferEntry.firstItemOffset, = struct.unpack("<I", meshFile.read(4));
                     entriesByteSize += 16
-                    self.vertexBuffer.entires.append(vertexBufferEntry)
-                # align after reading entires
+                    self.vertexBuffer.entries.append(vertexBufferEntry)
+                # align after reading entries
                 offsetTracker.alignedAdvance(entriesByteSize)
                 meshFile.seek(offsetTracker.offset())
-                for entry in self.vertexBuffer.entires:
+                for entry in self.vertexBuffer.entries:
                     nameLength, = struct.unpack("<I", meshFile.read(4))
                     offsetTracker.advance(4)
                     unpackFormat = "<" + str(nameLength) + "s"
@@ -413,7 +415,7 @@ class Mesh:
                 # write Mesh metadata
                 meshMetaData = bytearray()
                 meshMetaData += struct.pack("<I", 0)
-                meshMetaData += struct.pack("<I", len(self.vertexBuffer.entires))
+                meshMetaData += struct.pack("<I", len(self.vertexBuffer.entries))
                 meshMetaData += struct.pack("<I", self.vertexBuffer.stride)
                 meshMetaData += struct.pack("<I", 0)
                 meshMetaData += struct.pack("<I", len(self.vertexBuffer.data))
@@ -436,7 +438,7 @@ class Mesh:
 
                 # Vertex Buffer Entries
                 entriesData = bytearray()
-                for entry in self.vertexBuffer.entires:
+                for entry in self.vertexBuffer.entries:
                     entriesData += struct.pack("<I", 0)
                     entriesData += struct.pack("<I", entry.componentType)
                     entriesData += struct.pack("<I", entry.numComponents)
@@ -447,7 +449,7 @@ class Mesh:
 
                 # Vertex Buffer Entry Names
                 entryNameData = bytearray()
-                for entry in self.vertexBuffer.entires:
+                for entry in self.vertexBuffer.entries:
                     entryNameData += struct.pack("<I", len(entry.name))
                     entryNameData += bytearray(entry.name, 'utf-8')
                     entryNameData += alignmentHelper(len(entry.name))
