@@ -42,6 +42,7 @@ def main():
     modeGroup.add_argument('--points', help='Convert Mesh to Points', action='store_true')
     modeGroup.add_argument('--lines', help='Convert Mesh to Lines', action='store_true')
     modeGroup.add_argument('--print', help='Print Mesh data', action='store_true')
+    modeGroup.add_argument('--downgrade', help='Downgrade Mesh to a lower version', action='store_true')
     args = parser.parse_args()
 
     inputfile = args.inputFile
@@ -57,10 +58,12 @@ def main():
         meshFile.convertToPointsPrimitive()
     elif args.lines:
         meshFile.convertToLinesPrimitive()
+    elif args.downgrade:
+        meshFile.downgradeMesh()
     elif args.print:
         for id,mesh in meshFile.meshes.items():
             mesh.vertexBuffer.unpackAttributes()
-            print(mesh.vertexBuffer.morphTargets["attr_tpos0\x00"] == mesh.vertexBuffer.morphTargets["attr_tpos1\x00"])
+            #print(mesh.vertexBuffer.morphTargets["attr_tpos0\x00"] == mesh.vertexBuffer.morphTargets["attr_tpos1\x00"])
 
 
     # Save new File

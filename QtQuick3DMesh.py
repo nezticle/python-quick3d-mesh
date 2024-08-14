@@ -76,7 +76,7 @@ class Mesh:
         def getFormatString(self):
             formatString = "<"
             formatLetter = ''
-            if self.componentType == 1: # uint8 
+            if self.componentType == 1: # uint8
                 formatLetter = 'B'
             elif self.componentType == 2: # int8
                 formatLetter = 'b'
@@ -219,7 +219,11 @@ class Mesh:
             self.data = data
             self.componentType = componentType
 
-
+    class TargetBuffer:
+        def __init__(self):
+            self.numTargets = 0
+            self.entries = []
+            self.data = []
 
     class MeshSubset:
         class MeshBounds:
@@ -261,9 +265,10 @@ class Mesh:
         self.meshInfo = self.MeshDataHeader()
         self.vertexBuffer = self.VertexBuffer()
         self.indexBuffer = self.IndexBuffer()
+        self.targetBuffer = self.TargetBuffer()
         self.subsets = []
         self.lods = []
-        self.joints = []  
+        self.joints = []
         self.drawMode = 7
         self.winding = 2
     def loadMesh(self, inputFile, offset):
@@ -285,17 +290,19 @@ class Mesh:
                 offsetTracker = self.MeshOffsetTracker(offset + 12)
                 meshFile.seek(offsetTracker.offset())
                 # Vertex Buffer
-                vertexBufferEntriesOffset, = struct.unpack("<I", meshFile.read(4))
+                targetBufferEntriesCount, = struct.unpack("<I", meshFile.read(4))
                 vertexBufferEntriesSize, = struct.unpack("<I", meshFile.read(4))
                 self.vertexBuffer.stride, = struct.unpack("<I", meshFile.read(4))
-                vertexBufferDataOffset, = struct.unpack("<I", meshFile.read(4))
+                targetBufferDataSize, = struct.unpack("<I", meshFile.read(4))
                 vertexBufferDataSize, = struct.unpack("<I", meshFile.read(4))
                 # Index Buffer
                 self.indexBuffer.componentType, = struct.unpack("<I", meshFile.read(4))
                 indexBufferDataOffset, = struct.unpack("<I", meshFile.read(4))
                 indexBufferDataSize, = struct.unpack("<I", meshFile.read(4))
                 # Subsets
-                subsetsOffsets, = struct.unpack("<I", meshFile.read(4))
+                numTargets, = struct.unpack("<I", meshFile.read(4))
+                if (self.meshInfo.fileVersion >= 7):
+                    self.targetBuffer.numTargets = numTargets
                 subsetsSize, = struct.unpack("<I", meshFile.read(4))
                 # Joints
                 jointsOffsets, = struct.unpack("<I", meshFile.read(4))
@@ -326,7 +333,7 @@ class Mesh:
                     # get things aligned again if needed
                     offsetTracker.alignedAdvance(nameLength)
                     meshFile.seek(offsetTracker.offset())
-                
+
                 # Vertex Buffer Data
                 self.vertexBuffer.data = meshFile.read(vertexBufferDataSize)
                 offsetTracker.alignedAdvance(vertexBufferDataSize)
@@ -365,7 +372,7 @@ class Mesh:
                         subsetByteSize += 40
                     self.subsets.append(subset)
                 # adjust for padding after subsets
-                offsetTracker.alignedAdvance(subsetByteSize) 
+                offsetTracker.alignedAdvance(subsetByteSize)
                 meshFile.seek(offsetTracker.offset())
 
                 # Subset Names
@@ -375,15 +382,18 @@ class Mesh:
                     meshFile.seek(offsetTracker.offset())
 
                 # Lods
+                lodDataByteSize = 0
                 for subset in self.subsets:
-                    for lodIndex in subset.lodCount:
+                    for lodIndex in range(subset.lodCount):
                         lod = self.Lod()
                         lod.count, = struct.unpack("<I", meshFile.read(4))
                         lod.offset, = struct.unpack("<I", meshFile.read(4))
                         lod.distance, = struct.unpack("<f", meshFile.read(4))
-                        offsetTracker.advance(12)
-                        meshFile.seek(offsetTracker.offset())
+                        lodDataByteSize += 12
                         self.lods.append(lod)
+                # adjust for padding after lods
+                offsetTracker.alignedAdvance(lodDataByteSize)
+                meshFile.seek(offsetTracker.offset())
 
                 # Joints
                 for jointIndex in range(jointsSize):
@@ -398,6 +408,37 @@ class Mesh:
                     meshFile.seek(offsetTracker.offset())
                     self.joints.append(joint)
 
+
+                # Target Buffer
+                if self.meshInfo.fileVersion >= 7:
+                    # Entries
+                    entriesByteSize = 0
+                    for entryIndex in range(targetBufferEntriesCount):
+                        targetBufferEntry = self.VertexBufferEntry()
+                        nameOffset, = struct.unpack("<I", meshFile.read(4))
+                        targetBufferEntry.componentType, = struct.unpack("<I", meshFile.read(4))
+                        targetBufferEntry.numComponents, = struct.unpack("<I", meshFile.read(4))
+                        targetBufferEntry.firstItemOffset, = struct.unpack("<I", meshFile.read(4));
+                        entriesByteSize += 16
+                        self.targetBuffer.entries.append(targetBufferEntry)
+                        # align after reading entries
+                        offsetTracker.alignedAdvance(entriesByteSize)
+                        meshFile.seek(offsetTracker.offset())
+                    # Entry Names
+                    for entry in self.targetBuffer.entries:
+                        nameLength, = struct.unpack("<I", meshFile.read(4))
+                        offsetTracker.advance(4)
+                        unpackFormat = "<" + str(nameLength) + "s"
+                        entry.name = struct.unpack(unpackFormat, meshFile.read(nameLength))[0].decode('utf-8')
+                        # get things aligned again if needed
+                        offsetTracker.alignedAdvance(nameLength)
+                        meshFile.seek(offsetTracker.offset())
+
+                    # Data
+                    self.targetBuffer.data = meshFile.read(targetBufferDataSize)
+                    offsetTracker.alignedAdvance(targetBufferDataSize)
+                    meshFile.seek(offsetTracker.offset())
+
                 meshFile.close()
         except OSError:
             print("Could not open/read file:", inputFile)
@@ -408,23 +449,35 @@ class Mesh:
             with open(outputFile, "wb") as meshFile:
                 # write header placeholder
                 meshFile.seek(offset, 0)
-                self.meshInfo.fileVersion = 6 # current version is 6
+                if self.meshInfo.fileVersion < 7:
+                    self.meshInfo.fileVersion = 6
+                else:
+                    self.meshInfo.fileVersion = 7 # current version is 7
                 header,headerSize = self.meshInfo.save()
                 meshFile.write(header)
                 offsetTracker = self.MeshOffsetTracker(headerSize)
                 # write Mesh metadata
                 meshMetaData = bytearray()
-                meshMetaData += struct.pack("<I", 0)
+                if self.meshInfo.fileVersion < 7:
+                    meshMetaData += struct.pack("<I", 0)
+                else:
+                    meshMetaData += struct.pack("<I", len(self.targetBuffer.entries))
                 meshMetaData += struct.pack("<I", len(self.vertexBuffer.entries))
                 meshMetaData += struct.pack("<I", self.vertexBuffer.stride)
-                meshMetaData += struct.pack("<I", 0)
+                if self.meshInfo.fileVersion < 7:
+                    meshMetaData += struct.pack("<I", 0)
+                else:
+                    meshMetaData += struct.pack("<I", len(self.targetBuffer.data))
                 meshMetaData += struct.pack("<I", len(self.vertexBuffer.data))
 
                 meshMetaData += struct.pack("<I", self.indexBuffer.componentType)
                 meshMetaData += struct.pack("<I", 0)
                 meshMetaData += struct.pack("<I", len(self.indexBuffer.data))
 
-                meshMetaData += struct.pack("<I", 0)
+                if self.meshInfo.fileVersion < 7:
+                    meshMetaData += struct.pack("<I", 0) # if version < 7
+                else:
+                    meshMetaData += struct.pack("<I", self.targetBuffer.numTargets)
                 meshMetaData += struct.pack("<I", len(self.subsets))
 
                 meshMetaData += struct.pack("<I", 0)
@@ -500,12 +553,38 @@ class Mesh:
                     lodData += struct.pack("<I", lod.offset)
                     lodData += struct.pack("<f", lod.distance)
                 meshFile.write(lodData)
+                lodData += alignmentHelper(len(lodData))
                 offsetTracker.advance(len(lodData))
+
+                if self.meshInfo.fileVersion >= 7:
+                    # target buffer entires
+                    targetEntriesData = bytearray()
+                    for entry in self.targetBuffer.entries:
+                        targetEntriesData += struct.pack("<I", 0)
+                        targetEntriesData += struct.pack("<I", entry.componentType)
+                        targetEntriesData += struct.pack("<I", entry.numComponents)
+                        targetEntriesData += struct.pack("<I", entry.firstItemOffset)
+                    targetEntriesData += alignmentHelper(len(targetEntriesData)) # alignment
+                    offsetTracker.advance(len(targetEntriesData))
+                    meshFile.write(targetEntriesData)
+
+                    # target buffer entry names
+                    targetEntryNameData = bytearray()
+                    for entry in self.targetBuffer.entries:
+                        targetEntryNameData += struct.pack("<I", len(entry.name))
+                        targetEntryNameData += bytearray(entry.name, 'utf-8')
+                        targetEntryNameData += alignmentHelper(len(entry.name))
+                    meshFile.write(targetEntryNameData)
+                    offsetTracker.advance(len(targetEntryNameData))
+
+                    # target buffer data
+                    meshFile.write(self.targetBuffer.data)
+                    meshFile.write(alignmentHelper(len(self.targetBuffer.data)))
+                    offsetTracker.alignedAdvance(len(self.targetBuffer.data))
 
                 # Now that we know the final size of the mesh, we need to write
                 # the header again with the correct size
                 meshFile.seek(offset, 0)
-                self.meshInfo.fileVersion = 6 # current version is 6
                 self.meshInfo.sizeInBytes = offsetTracker.offset() - headerSize
                 header,headerSize = self.meshInfo.save()
                 meshFile.write(header)
@@ -574,7 +653,7 @@ class Mesh:
             newOffset += subset.count
             for index in subsetIndex:
                 newIndexes.append(index)
-        
+
         # Create new index buffer and fill
         componentType = 5 # uint32
         if len(newIndexes) < 65535:
@@ -609,7 +688,7 @@ class MultiMeshInfo:
                         meshOffset, = struct.unpack("<Q", meshFile.read(8))
                         meshId, = struct.unpack("<I", meshFile.read(4))
                         self.meshEntries[meshId] = meshOffset
-                
+
                 meshFile.close()
         except OSError:
             print("Could not open/read file:", inputFile)
@@ -648,7 +727,7 @@ class MeshFile:
 
     def loadMeshFile(self, inputFile):
         self.multiMeshInfo.loadMultiMeshInfo(inputFile);
-    
+
         if self.multiMeshInfo.isValid() and len(self.multiMeshInfo.meshEntries) > 0:
             # This is indeed a MultiMesh file
             for entryId in self.multiMeshInfo.meshEntries.keys():
@@ -677,9 +756,14 @@ class MeshFile:
         for mesh in self.meshes.values():
             result &= mesh.convertToPointsPrimitive()
         return result
-    
+
     def convertToLinesPrimitive(self):
         result = False
         for mesh in self.meshes.values():
             result &= mesh.convertToLinesPrimitive()
         return result
+
+    def downgradeMesh(self):
+        for mesh in self.meshes.values():
+            mesh.meshInfo.fileVersion = 6
+            ## TODO - move morph targets to vertex buffer entries

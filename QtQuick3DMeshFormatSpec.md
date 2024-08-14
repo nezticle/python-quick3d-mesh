@@ -4,7 +4,7 @@ Qt Quick 3D Mesh files are a binary format for storing 3D geometry. Mesh files c
 
 An important note to remember is that most of the values with offset in the name are misleading.  MultiMeshEntry::meshOffset is the only field you can trust, all other offset fields are garbage values that would get filled in later by the parser, and is an implementation detail that leaked into the file format.  So rather than using any data that might be in those offsets, either skip them, or ignore any value after reading them in.  The *real* offset of the value will be specified by this spec.  The offsets will be at certain locations in the file based on the order of the structs below.
 
-Another important point is expected padding.  Everything needs to be 4 byte aligned, and for the most part it is already (with the exception of some string data). But also do to some weird implementation details (READ: Bugs) sometimes you just need to throw in an extra 4 bytes for good measurer.  So note after reading all VertexBufferEntries (not between each one though), you need to add 4 bytes of padding before parsing/writing the name strings.  The same thing is true when reading the subset data.  Read all subsets together (they will be 4 byte aligned already) then after reading all of them, add 4 bytes of padding before reading/writing the subset names.  
+Another important point is expected padding.  Everything needs to be 4 byte aligned, and for the most part it is already (with the exception of some string data). But also do to some weird implementation details (READ: Bugs) sometimes you just need to throw in an extra 4 bytes for good measurer.  So note after reading all VertexBufferEntries (not between each one though), you need to add 4 bytes of padding before parsing/writing the name strings.  The same thing is true when reading the subset data.  Read all subsets together (they will be 4 byte aligned already) then after reading all of them, add 4 bytes of padding before reading/writing the subset names.
 
 Endianess is little endian for everything.  Floating point values are all single precision 32bit floats.  Some strings are UTF-8, some are UTF_16_LE... not sure why, but it is what is.
 
@@ -32,14 +32,17 @@ Added lightmapWidth and lightmapHeight to Subsets
 ### Version 6
 Added LOD levels to subsets
 
+### Version 7
+Splits the morph target data
+
 
 ## MeshDataHeader (12 bytes)
 - UInt32 fileId | 3365961549U
 - UInt16 fileVersion | 3
-- UInt16 headerFlags 
+- UInt16 headerFlags
 - UInt32 sizeInBytes
 
-## Mesh (56 bytes)
+## Mesh (56 bytes) (before version 7)
 - VertexBuffer vertexBuffer
     - UInt32 entriesOffset // ignore this value
     - UInt32 entriesSize
@@ -51,6 +54,24 @@ Added LOD levels to subsets
     - UInt32 dataOffset // ignore this value
     - UInt32 dataSize
 - UInt32 subsetsOffset // ignore this value
+- UInt32 subsetsSize
+- UInt32 jointsOffset // ignore this value
+- UInt32 jointsSize
+- UInt32 drawMode
+- UInt32 winding
+
+## Mesh_V7 (56 bytes)
+- VertexBuffer vertexBuffer
+    - UInt32 targetBufferEntriesCount
+    - UInt32 entriesSize
+    - UInt32 stride
+    - UInt32 targetBufferDataSize;
+    - UInt32 dataSize
+- IndexBuffer indexBuffer
+    - UInt32 componentType
+    - UInt32 dataOffset // ignore this value
+    - UInt32 dataSize
+- UInt32 targetCount
 - UInt32 subsetsSize
 - UInt32 jointsOffset // ignore this value
 - UInt32 jointsSize
@@ -128,6 +149,8 @@ Lods are stored after subset names in order of subsets
 - UInt32 offset // start of lod indexes
 - float32 distance // ideal distance metric for usage
 
+- 4bytes of alignment padding
+
 ## Joint [Mesh::joinsSize] (136 bytes)
 - UInt32 jointID
 - UInt32 parentID
@@ -136,6 +159,22 @@ Lods are stored after subset names in order of subsets
 - optional padding (so we are 4 byte aligned)
 - ...
 
+## Target Buffer Entries [VertexBuffer::targetBufferEntriesCount]
+- UInt32 nameOffset // ignore this value
+- UInt32 componentType
+- UInt32 numComponents
+- UInt32 firstItemOffset
+- ...
+- 4bytes of alignment padding
+
+## Target Buffer Entry Names [VertexBuffer::targetBufferEntriesCount]
+- UInt32 nameLength
+- char[nameLength] name
+- optional padding (so we are 4 byte aligned)
+- ...
+
+## Target Buffer Data
+- UInt8[VertexBuffer::targetBufferDataSize]
 
 ## MeshMultiEntry (16 bytes) [MultiMeshFooter::entriesSize]
 - UInt64 meshOffset // only offset you can trust (seek to this to get the mesh data)
@@ -192,8 +231,8 @@ Lods are stored after subset names in order of subsets
 ## semantic sizes
 - Index 1
 - Position 3
-- Normal 3 
-- TexCoord 2 
+- Normal 3
+- TexCoord 2
 - Tangent 3
 - Binormal 3
 - Joint 4
